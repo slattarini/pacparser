@@ -30,6 +30,36 @@ OS_ARCH := $(subst /,_,$(shell uname -s | sed /\ /s//_/))
 LIBRARY_NAME = libpacparser
 LIB_VER = 1
 
+PYTHON ?= python
+
+LDFLAGS =
+CFLAGS = -g -DXP_UNIX -Wall -DVERSION=$(VERSION)
+
+# NOTICE(slattarini): in an ideal world, we would autonconfiscate the
+# pacparser build system and turn these definition into automatically
+# populated ones (via ./configure); however, given the current status of
+# the build system, compounded by the fact that we use a bundled package
+# (SpiderMonkey) which is not autconfiscated and mostly incompatible with
+# several autotools conventions, we take the easier albeit suboptimal
+# solution.
+HAVE_C_ARES ?= auto
+ifeq "$(HAVE_C_ARES)" "auto"
+  HAVE_C_ARES := $(shell pkg-config --exists libcares && echo yes || echo no)
+  $(info HAVE_C_ARES was undefined; autodetected to "$(HAVE_C_ARES)")
+  ifeq "$(HAVE_C_ARES)" "yes"
+    C_ARES_CFLAGS := $(shell pkg-config --cflags libcares)
+    C_ARES_LDFLAGS := $(shell pkg-config --libs libcares)
+  endif
+endif
+ifeq "$(HAVE_C_ARES)" "yes"
+  C_ARES_CFLAGS += -DHAVE_C_ARES
+else
+  $(warning c-ares (http://c-ares.haxx.se) library not found or disabled)
+  $(warning Some DNS-related features will be unavilable)
+endif
+CFLAGS += $(C_ARES_CFLAGS)
+LDFLAGS += $(C_ARES_LDFLAGS)
+
 # This Makefile should at least work on Linux and Mac OS X. It should work on
 # most other types of Unix systems too, but I have not put any conscious effort
 # for that.
@@ -53,12 +83,6 @@ ifeq ($(OS_ARCH),Darwin)
   ifeq ($(MAC_GT_5),false)
     SMCFLAGS =
   endif
-endif
-
-CFLAGS = -g -DXP_UNIX -Wall -DVERSION=$(VERSION)
-
-ifndef PYTHON
-  PYTHON = python
 endif
 
 # Spidermonkey library.

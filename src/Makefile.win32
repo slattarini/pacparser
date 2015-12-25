@@ -26,20 +26,35 @@ LIB_VER=1
 CFLAGS=-g -DXP_WIN -DVERSION=$(VERSION) -Ispidermonkey/js/src -Wall
 CC=gcc
 
+# We don't attempt autodetection of these on Windows. The user is
+# responsible to fill in the config manually if he wants to use c-ares
+# and the extra features it provides.
+HAVE_C_ARES ?= no
+C_ARES_CFLAGS ?=
+C_ARES_LDFLAGS ?=
+ifeq "$(HAVE_C_ARES)" "yes"
+  C_ARES_CFLAGS += -DHAVE_C_ARES
+else
+  $(warning c-ares (http://c-ares.haxx.se) library not enabled)
+  $(warning Some DNS-related features will be unavilable)
+endif
+CFLAGS += $(C_ARES_CFLAGS)
+LDFLAGS += $(C_ARES_LDFLAGS)
+
 .PHONY: clean pymod install-pymod
 
 all: pacparser.dll pacparser.lib pactester
 
 pacparser.o: pacparser.c pac_utils.h js.lib
 	$(CC) $(CFLAGS) -c pacparser.c -o pacparser.o
-	
+
 fdlibm.lib js.lib:
 	$(MAKE) -C spidermonkey -f Makefile.win32
 	copy spidermonkey\fdlibm.lib .
 	copy spidermonkey\js.lib .
 
 pacparser.dll: pacparser.o fdlibm.lib js.lib
-	$(CC) -shared -o pacparser.dll \
+	$(CC) $(LDFLAGS) -shared -o pacparser.dll \
 	-Wl,--output-def,pacparser.def \
 	-Wl,--out-implib,libpacparser.a \
 	-Wl,--export-all-symbols \
@@ -49,7 +64,7 @@ pacparser.lib: pacparser.dll pacparser.def
 	lib /machine:i386 /def:pacparser.def
 
 pactester: pactester.c pacparser.h pacparser.dll
-	$(CC) pactester.c -o pactester -lpacparser -L. -I.
+	$(CC) pactester.c -o pactester -lpacparser -L. -I. $(LDFLAGS)
 
 dist: pacparser.dll pactester
 	if exist dist rmdir /s /q dist
